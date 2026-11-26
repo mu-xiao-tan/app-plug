@@ -1,0 +1,103 @@
+name: App Plug CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  GOTOOLCHAIN: local
+  CGO_ENABLED: '0'
+
+jobs:
+  build:
+    name: Build and test (${{ matrix.target }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: linux-amd64
+            runner: ubuntu-24.04
+          - target: linux-arm64
+            runner: ubuntu-24.04-arm
+          - target: darwin-amd64
+            runner: macos-15-intel
+          - target: darwin-arm64
+            runner: macos-15
+          - target: windows-amd64
+            runner: windows-2025
+          - target: windows-arm64
+            runner: windows-11-arm
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Set up Go from go.mod
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Set up Python for packaging
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: '3.14'
+      - name: Check native Go target and formatting
+        shell: bash
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          go version
+          host="$(go env GOHOSTOS)-$(go env GOHOSTARCH)"
+          target="$(go env GOOS)-$(go env GOARCH)"
+          case "$RUNNER_ARCH" in
+            X64) runner_arch=amd64 ;;
+            ARM64) runner_arch=arm64 ;;
+            *) printf 'Unsupported runner architecture: %s\n' "$RUNNER_ARCH" >&2; exit 1 ;;
+          esac
+          if [[ "$host" != "$TARGET" || "$target" != "$TARGET" || "$runner_arch" != "${TARGET#*-}" ]]; then
+            printf 'Expected native %s, found runner arch %s, host %s and target %s\n' "$TARGET" "$runner_arch" "$host" "$target" >&2
+            exit 1
+          fi
+          unformatted=$(gofmt -l ./src)
+          if [[ -n "$unformatted" ]]; then
+            printf 'Run gofmt on:\n%s\n' "$unformatted" >&2
+            exit 1
+          fi
+      - run: go vet ./...
+      - run: go test -count=1 -v ./...
+      - name: Build, verify checksum and smoke-test the archive
+        env:
+          TARGET: ${{ matrix.target }}
+        shell: bash
+        run: python -I scripts/package.py dist "$TARGET"
+      - name: Upload verified CI package
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: app-plug-${{ matrix.target }}
+          path: dist/
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+
+  required:
+    name: App Plug CI required
+    if: ${{ always() }}
+    needs: [build]
+    permissions: {}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Require every matrix job to succeed
+        shell: bash
+        env:
+          BUILD_RESULT: ${{ needs.build.result }}
+        run: |
+          printf 'Build matrix result: %s\n' "$BUILD_RESULT"
+          test "$BUILD_RESULT" = success

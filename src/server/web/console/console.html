@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>管理工作台 | 应用插座 · App Plug</title>
+  <link rel="icon" type="image/svg+xml" href="/_app-plug/app-plug-mark.svg">
+  <link rel="stylesheet" href="/_app-plug/theme.css">
+  <link rel="stylesheet" href="{{.AdminPath}}/style.css">
+  <script src="/_app-plug/theme.js" defer></script>
+  <script src="{{.AdminPath}}/app.js" defer></script>
+</head>
+<body data-admin-path="{{.AdminPath}}" data-api-path="{{.APIPath}}">
+  <header class="masthead">
+    <div class="frame masthead-inner">
+      <div class="brand">
+        <span class="wordmark" role="img" aria-label="应用插座 · App Plug">
+          <img class="wordmark-light" src="/_app-plug/app-plug-lockup.svg" width="256" height="76" alt="">
+          <img class="wordmark-dark" src="/_app-plug/app-plug-lockup-dark.svg" width="256" height="76" alt="">
+        </span>
+        <span class="brand-context">管理后台</span>
+      </div>
+      <div class="masthead-actions">
+        <a id="home-link" class="icon-action" href="/" aria-label="应用目录" title="应用目录" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 11 9-8 9 8m-16-1v10h5v-6h4v6h5V10"/></svg></a>
+        <button id="logout" class="icon-action" type="button" aria-label="退出登录" title="退出登录" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 4H5v16h5m4-13 5 5-5 5m-6-5h11"/></svg></button>
+        {{template "appearance"}}
+      </div>
+    </div>
+  </header>
+  <main class="frame">
+    <section id="signin" class="signin rack" aria-labelledby="signin-title">
+      <header class="rack-head"><div><h1 id="signin-title">管理员登录</h1><p>应用接线台</p></div>{{template "trace"}}</header>
+      <form id="login-form" method="post" autocomplete="off" aria-labelledby="signin-title">
+        <div class="field">
+          <label for="login-token">Bearer 令牌</label>
+          <input id="login-token" type="pass&#119;ord" required autocomplete="off" spellcheck="false" autocapitalize="none" aria-describedby="login-hint login-error">
+          <small id="login-hint">使用管理员令牌。令牌不保存，刷新或退出后需重新输入。</small>
+        </div>
+        <p id="login-error" class="notice error" role="alert" hidden></p>
+        <button id="login-submit" class="primary" type="submit" disabled>登录</button>
+      </form>
+      <noscript><p class="notice error">管理后台需要 JavaScript。启用后请重新载入本页。</p></noscript>
+    </section>
+
+    <div id="workspace" class="rack" hidden>
+      <header class="rack-head"><div><h1>管理接线台</h1><p>应用路由与访问配置</p></div>{{template "trace"}}</header>
+      <div class="page-heading">
+        <div class="page-controls">
+          <p class="actor">当前身份 <code id="actor"></code></p>
+          <button id="refresh" class="quiet" type="button" data-task>刷新数据</button>
+        </div>
+      </div>
+      <div class="workspace-body">
+        <nav id="sections" class="section-nav" aria-label="管理栏目">
+          <button type="button" data-section="routes" aria-controls="routes-section" aria-pressed="true">
+            <span>应用路由</span><span id="route-count" class="nav-count" aria-hidden="true"></span>
+          </button>
+          <button type="button" data-section="nodes" aria-controls="nodes-section" aria-pressed="false" hidden>
+            <span>旧版节点</span><span id="node-count" class="nav-count" aria-hidden="true"></span>
+          </button>
+          <button type="button" data-section="principals" aria-controls="principals-section" aria-pressed="false">
+            <span>部署身份</span><span id="principal-count" class="nav-count" aria-hidden="true"></span>
+          </button>
+          <button type="button" data-section="settings" aria-controls="settings-section" aria-pressed="false">
+            <span>访问设置</span>
+          </button>
+        </nav>
+        <div class="section-content">
+          <section id="token-receipts" class="receipts" aria-label="新生成的令牌" hidden></section>
+          <p id="activity" class="notice" role="status" hidden></p>
+          <p id="workspace-error" class="notice error" role="alert" hidden></p>
+          <section id="routes-section" aria-labelledby="routes-title">
+            <header class="section-heading">
+              <div><h2 id="routes-title">应用路由</h2><p>转发到已运行的服务，或在本机托管应用。</p></div>
+              <button id="new-route" class="primary" type="button" data-task>添加应用</button>
+            </header>
+            <form id="route-form" class="editor" method="post" autocomplete="off" aria-labelledby="route-form-title" hidden>
+              <fieldset class="editor-fields">
+                <legend id="route-form-title">添加应用</legend>
+                <div class="fields">
+                  <label class="field" for="route-name">应用名称
+                    <input id="route-name" aria-describedby="route-name-hint">
+                    <small id="route-name-hint" hidden>本机托管可留空，默认显示域名。</small>
+                  </label>
+                  <label class="field" for="route-mode">接入方式
+                    <select id="route-mode"><option value="direct">填写上游地址</option><option value="managed">本机托管</option></select>
+                  </label>
+                  <label class="field full" for="route-address" id="route-address-field">IP 和端口
+                    <input id="route-address" required placeholder="127.0.0.1:1234" spellcheck="false" autocapitalize="none" aria-describedby="route-address-hint">
+                    <small id="route-address-hint">填写私有或回环 IP；IPv6 例：[::1]:1234。</small>
+                  </label>
+                  <label class="field full" for="route-start-file" id="route-start-file-field" hidden>启动文件
+                    <input id="route-start-file" required disabled placeholder="/path/to/demo-app/start" spellcheck="false" autocapitalize="none" aria-describedby="route-start-file-hint">
+                    <small id="route-start-file-hint">填写服务器上可执行文件或脚本的绝对路径。</small>
+                  </label>
+                  <label class="field full" for="route-args" id="route-args-field" hidden>启动参数（可选）
+                    <textarea id="route-args" rows="2" disabled placeholder='["--host", "127.0.0.1"]' spellcheck="false" aria-describedby="route-args-hint"></textarea>
+                    <small id="route-args-hint">填写 JSON 字符串数组，每个字符串是一个参数；不经 Shell 拆分，留空表示无参数。</small>
+                  </label>
+                  <label class="field full" for="route-port" id="route-port-field" hidden>托管端口（可选）
+                    <input id="route-port" type="number" min="1" max="65535" step="1" inputmode="numeric" disabled aria-describedby="route-port-hint">
+                    <small id="route-port-hint">留空时自动发现监听端口。</small>
+                  </label>
+                  <div class="field full" id="route-auto-start-field" hidden>
+                    <label class="checkbox" for="route-auto-start"><input id="route-auto-start" type="checkbox" disabled>随导航服务启动</label>
+                  </div>
+                  <label class="field full" for="route-domain">域名
+                    <input id="route-domain" required maxlength="253" spellcheck="false" autocapitalize="none" aria-describedby="domain-hint">
+                    <small id="domain-hint"></small>
+                  </label>
+                  <label class="field full" for="route-description">简介（可选）
+                    <textarea id="route-description" rows="3"></textarea>
+                  </label>
+                </div>
+                <p id="route-error" class="notice error" role="alert" hidden></p>
+                <div class="actions"><button class="primary" type="submit">保存应用</button><button class="quiet" type="button" data-cancel>取消</button></div>
+                <div id="deploy-key-actions" class="actions editor-secondary" hidden>
+                  <button class="quiet" name="action" value="issue-key" type="submit">生成临时 API Key</button>
+                  <small>不保存应用。密钥只授权添加此应用；15 分钟内有效，成功使用后失效。</small>
+                </div>
+              </fieldset>
+            </form>
+            <div class="record-columns" aria-hidden="true"><span>应用</span><span>接入与状态</span><span>操作</span></div>
+            <ul id="route-list" class="records" aria-label="路由列表"></ul>
+          </section>
+          <section id="nodes-section" aria-labelledby="nodes-title" hidden>
+            <header class="section-heading">
+              <div><h2 id="nodes-title">旧版节点</h2><p>供部署 API 限制可用机器和端口，也用于已有的节点路由。手动添加应用不需要配置节点。</p></div>
+              <button id="new-node" class="primary" type="button" data-task>新建节点</button>
+            </header>
+            <form id="node-form" class="editor" method="post" autocomplete="off" aria-labelledby="node-form-title" hidden>
+              <fieldset class="editor-fields">
+                <legend id="node-form-title">新建节点</legend>
+                <div class="fields">
+                  <label class="field" for="node-name">节点名称
+                    <input id="node-name" required maxlength="32" pattern="[a-z](?:[a-z0-9\-]{0,30}[a-z0-9])?" aria-describedby="node-name-hint">
+                    <small id="node-name-hint">以小写字母开头，仅限小写字母、数字及内部连字符。</small>
+                  </label>
+                  <label class="field" for="node-ip">节点 IP
+                    <input id="node-ip" required spellcheck="false" autocapitalize="none" aria-describedby="node-ip-hint">
+                    <small id="node-ip-hint">请输入私有或回环 IP，不含方括号、协议和端口。</small>
+                  </label>
+                  <label class="field" for="node-min">起始端口
+                    <input id="node-min" type="number" required min="1" max="65535" step="1" inputmode="numeric">
+                  </label>
+                  <label class="field" for="node-max">结束端口
+                    <input id="node-max" type="number" required min="1" max="65535" step="1" inputmode="numeric">
+                  </label>
+                </div>
+                <p id="node-error" class="notice error" role="alert" hidden></p>
+                <div class="actions"><button class="primary" type="submit">保存节点</button><button class="quiet" type="button" data-cancel>取消</button></div>
+              </fieldset>
+            </form>
+            <div class="record-columns" aria-hidden="true"><span>节点</span><span>地址与端口</span><span>操作</span></div>
+            <ul id="node-list" class="records" aria-label="节点列表"></ul>
+          </section>
+          <section id="principals-section" aria-labelledby="principals-title" hidden>
+            <header class="section-heading">
+              <div><h2 id="principals-title">部署身份</h2><p>为管理员和部署任务签发独立令牌，限制部署范围。</p></div>
+              <button id="new-principal" class="primary" type="button" data-task>新建身份</button>
+            </header>
+            <form id="rotate-form" class="editor" method="post" autocomplete="off" aria-labelledby="rotate-title" hidden>
+              <fieldset class="editor-fields">
+                <legend id="rotate-title">修改令牌</legend>
+                <p id="rotate-hint" class="muted">请使用密码管理器生成 16–128 个字符的令牌。仅允许英文字母、数字及 . _ ~ + / = -。</p>
+                <div class="fields">
+                  <label class="field" for="new-token">新令牌
+                    <input id="new-token" type="pass&#119;ord" required minlength="16" maxlength="128" autocomplete="new-pass&#119;ord" spellcheck="false" autocapitalize="none" aria-describedby="rotate-hint">
+                  </label>
+                  <label class="field" for="confirm-token">确认新令牌
+                    <input id="confirm-token" type="pass&#119;ord" required minlength="16" maxlength="128" autocomplete="new-pass&#119;ord" spellcheck="false" autocapitalize="none">
+                  </label>
+                </div>
+                <p id="rotate-error" class="notice error" role="alert" hidden></p>
+                <p class="notice warning">保存后，旧令牌立即失效。请同步更新使用此令牌的客户端。</p>
+                <div class="actions"><button class="primary" type="submit">保存新令牌</button><button id="rotate-cancel" class="quiet" type="button">取消</button></div>
+              </fieldset>
+            </form>
+            <form id="principal-form" class="editor" method="post" autocomplete="off" aria-labelledby="principal-form-title" hidden>
+              <fieldset class="editor-fields">
+                <legend id="principal-form-title">新建身份</legend>
+                <div class="fields">
+                  <label class="field" for="principal-name">身份名称
+                    <input id="principal-name" required maxlength="32" pattern="[a-z](?:[a-z0-9\-]{0,30}[a-z0-9])?" aria-describedby="principal-name-hint">
+                    <small id="principal-name-hint">以小写字母开头，仅限小写字母、数字及内部连字符。</small>
+                  </label>
+                  <label class="field" for="principal-role">身份类型
+                    <select id="principal-role"><option value="scoped">受限部署身份</option><option value="admin">管理员</option></select>
+                  </label>
+                </div>
+                <fieldset id="principal-scope" class="scope-fields" aria-describedby="scope-hint">
+                  <legend>部署授权</legend>
+                  <p id="scope-hint" class="muted">填写允许部署的域名及目标 IP 或网段，每行一项。</p>
+                  <div class="fields">
+                    <label class="field" for="principal-domains">允许域名
+                      <textarea id="principal-domains" rows="2" spellcheck="false" placeholder="a.example.com"></textarea>
+                      <small>完整域名或单层通配，例如 *.dev.example.com。</small>
+                    </label>
+                    <label class="field" for="principal-networks">允许 IP 或网段
+                      <textarea id="principal-networks" rows="2" spellcheck="false" placeholder="127.0.0.1"></textarea>
+                      <small>只授权应用所在机器，例如 127.0.0.1 或 127.0.0.1/32。</small>
+                    </label>
+                  </div>
+                  <div id="legacy-grants" hidden>
+                    <p class="muted">此身份已有旧版授权，仍可继续使用。</p>
+                    <div class="fields">
+                      <label class="field" for="principal-aliases">精确别名
+                        <textarea id="principal-aliases" rows="2" spellcheck="false" aria-describedby="aliases-hint"></textarea>
+                        <small id="aliases-hint">多个值用换行、空格或逗号分隔。</small>
+                      </label>
+                      <label class="field" for="principal-prefixes">别名前缀
+                        <textarea id="principal-prefixes" rows="2" spellcheck="false" aria-describedby="prefixes-hint"></textarea>
+                        <small id="prefixes-hint">前缀须以连字符结尾，例如 demo-；可填多个。</small>
+                      </label>
+                    </div>
+                    <div class="grant-heading"><h3>节点授权</h3><button id="add-grant" class="quiet" type="button">添加节点授权</button></div>
+                    <p id="grant-empty" class="muted">尚未分配节点。</p>
+                    <div id="node-grants" class="grants"></div>
+                  </div>
+                </fieldset>
+                <p id="principal-error" class="notice error" role="alert" hidden></p>
+                <div class="actions"><button class="primary" type="submit">保存身份</button><button class="quiet" type="button" data-cancel>取消</button></div>
+              </fieldset>
+            </form>
+            <template id="grant-template">
+              <div class="grant">
+                <label class="field">授权节点 <select class="grant-node" required></select></label>
+                <label class="field">起始端口 <input class="grant-min" type="number" required min="1" max="65535" step="1" inputmode="numeric"></label>
+                <label class="field">结束端口 <input class="grant-max" type="number" required min="1" max="65535" step="1" inputmode="numeric"></label>
+                <button class="quiet danger remove-grant" type="button">移除授权</button>
+              </div>
+            </template>
+            <div class="record-columns" aria-hidden="true"><span>身份</span><span>部署授权</span><span>操作</span></div>
+            <ul id="principal-list" class="records" aria-label="身份列表"></ul>
+          </section>
+          <section id="settings-section" aria-labelledby="settings-title" hidden>
+            <header class="section-heading">
+              <div><h2 id="settings-title">访问设置</h2><p>管理部署 API 的访问范围和 MCP 的连接路径。</p></div>
+            </header>
+            <form id="settings-form" class="editor settings-editor" method="post" autocomplete="off" aria-labelledby="settings-form-title">
+              <fieldset class="editor-fields">
+                <legend id="settings-form-title">部署 API</legend>
+                <label class="field" for="api-mode">API 访问模式
+                  <select id="api-mode" aria-describedby="settings-hint settings-warning">
+                    <option value="ip">仅 IP 地址</option>
+                    <option value="on">IP 地址和导航域名</option>
+                    <option value="off">停用部署 API</option>
+                  </select>
+                </label>
+                <p id="settings-hint" class="muted"></p>
+                <p id="settings-warning" class="notice warning" role="status" hidden></p>
+                <p id="settings-error" class="notice error" role="alert" hidden></p>
+                <div class="actions"><button class="primary" type="submit">保存 API 设置</button></div>
+              </fieldset>
+            </form>
+            <form id="mcp-settings-form" class="editor settings-editor" method="post" autocomplete="off" aria-labelledby="mcp-settings-title">
+              <fieldset class="editor-fields">
+                <legend id="mcp-settings-title">MCP</legend>
+                <label class="field" for="mcp-path">MCP 路径
+                  <input id="mcp-path" required maxlength="33" pattern="/[a-z](?:[a-z0-9\-]{0,30}[a-z0-9])?" spellcheck="false" autocapitalize="none" aria-describedby="mcp-path-hint">
+                  <small id="mcp-path-hint">例如 /mcp。保存后更新客户端地址。启停和仅 IP 模式在配置文件中设置。</small>
+                </label>
+                <p id="mcp-settings-error" class="notice error" role="alert" hidden></p>
+                <div class="actions"><button class="primary" type="submit">保存 MCP 路径</button></div>
+              </fieldset>
+            </form>
+          </section>
+        </div>
+        <details id="instance-panel" class="instance-panel">
+          <summary id="instance-title">实例信息</summary>
+          <dl class="instance">
+            <div><dt>基础域名</dt><dd id="base-domain"></dd></div>
+            <div><dt>导航域名</dt><dd id="home-host"></dd></div>
+            <div><dt>监听端口</dt><dd id="listen-port"></dd></div>
+            <div><dt>部署 API</dt><dd id="api-summary"></dd></div>
+          </dl>
+        </details>
+      </div>
+    </div>
+  </main>
+  <footer class="frame build-footer"><span>应用插座 · App Plug</span><code>{{.Version}}</code></footer>
+</body>
+</html>

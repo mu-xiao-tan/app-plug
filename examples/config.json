@@ -1,0 +1,18 @@
+{
+  "baseDomain": "example.com",
+  "homeHost": "nav.example.com",
+  "listenPort": 49101,
+  "apiMode": "ip",
+  "adminPath": "/admin",
+  "apiPath": "/api",
+  "mcpPath": "/mcp",
+  "mcpMode": "ip",
+  "principals": {
+    "operator": {"admin": true, "tokenSHA256": "填写管理员令牌的 SHA-256 摘要"},
+    "demo-deploy": {
+      "tokenSHA256": "填写部署身份令牌的 SHA-256 摘要",
+      "domains": ["demo-app.example.com"],
+      "networks": ["127.0.0.1"]
+    }
+  }
+}

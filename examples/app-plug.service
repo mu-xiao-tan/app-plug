@@ -1,0 +1,15 @@
+[Unit]
+Description=应用插座 · App Plug
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/app-plug -config %h/.config/app-plug/config.json -state-dir %h/.local/state/app-plug
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=2s
+NoNewPrivileges=true
+UMask=0077
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>应用接线台 · App Plug</title>
+  <meta name="description" content="查看已接入的应用和入口状态">
+  <link rel="icon" type="image/svg+xml" href="/_app-plug/app-plug-mark.svg">
+  <link rel="stylesheet" href="/_app-plug/theme.css">
+  <link rel="stylesheet" href="/_app-plug/style.css">
+  <script src="/_app-plug/theme.js" defer></script>
+  <script src="/_app-plug/copy.js" defer></script>
+</head>
+<body>
+  <header class="masthead">
+    <div class="frame masthead-inner">
+      <span class="wordmark" role="img" aria-label="应用插座 · App Plug">
+        <img class="wordmark-light" src="/_app-plug/app-plug-lockup.svg" width="256" height="76" alt="">
+        <img class="wordmark-dark" src="/_app-plug/app-plug-lockup-dark.svg" width="256" height="76" alt="">
+      </span>
+      <div class="home-tools">
+        <button type="button" id="show-prompt" class="icon-action" aria-label="接入提示词" title="接入提示词" aria-haspopup="dialog" aria-controls="prompt-dialog" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m7 9 3 3-3 3m6 0h4"/></svg></button>
+        {{template "appearance"}}
+      </div>
+    </div>
+  </header>
+
+  <main class="frame">
+    <section class="rack" aria-labelledby="directory-title">
+    <header class="rack-head"><div><h1 id="directory-title">应用接线台</h1><p>开发与测试应用目录</p></div>{{template "trace"}}</header>
+    <div class="rack-body">
+    <div class="columns" aria-hidden="true"><span>编号</span><span>应用</span><span>入口域名</span><span>状态</span></div>
+
+    {{if .Apps}}
+    <ul class="apps" role="list" aria-labelledby="directory-title">
+      {{range .Apps}}
+      <li class="app">
+        <span class="jack" aria-hidden="true"></span>
+        <div class="app-main">
+          <h2>{{.Name}}</h2>
+          {{if .Description}}<p>{{.Description}}</p>{{end}}
+        </div>
+        <a class="app-link" href="https://{{.Host}}/" aria-label="打开 {{.Name}}（{{.Host}}）"><code>{{.Host}}</code></a>
+        <div class="app-status">
+          <span class="app-state {{.StateClass}}">{{.State}}</span>
+          <small>{{if .HTTPStatus}}HTTP {{.HTTPStatus}}{{else}}{{.Detail}}{{end}}</small>
+        </div>
+        <span class="arrow" aria-hidden="true">↗</span>
+      </li>
+      {{end}}
+    </ul>
+    {{else}}
+    <div class="empty">
+      <h2>尚未接入应用</h2>
+      <p>管理员可在管理后台添加应用。交给 AI 操作时，可按任务复制「接入提示词」，并另行提供凭据。</p>
+    </div>
+    {{end}}
+    </div>
+    <div class="rack-foot"><span class="meter" aria-hidden="true"></span><span>{{len .Apps}} 个入口</span><span aria-hidden="true">·</span><span>{{.Reachable}} 个可达</span><a class="refresh" href="/">刷新</a></div>
+    </section>
+
+    <details class="scope">
+      <summary>状态如何判断？</summary>
+      <p>服务约每 20 秒向上游入口发送一次 HEAD 请求，单次最多 2 秒。收到任何 HTTP 响应（包括 401 或 403）即为「可达」，不代表公网能访问、访问已授权或应用功能正常。</p>
+    </details>
+    <noscript><p class="scope">启用 JavaScript 后可使用接入提示词和外观设置。</p></noscript>
+  </main>
+
+  <footer class="frame build-footer"><span>应用插座 · App Plug</span><code>{{.Version}}</code></footer>
+
+  <dialog id="prompt-dialog" class="registration" aria-labelledby="prompt-title" aria-describedby="prompt-help">
+    <div class="registration-head">
+      <h2 id="prompt-title">应用接入提示词</h2>
+      <form method="dialog"><button class="icon-action" type="submit" aria-label="关闭提示词" title="关闭提示词"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></form>
+      <p id="prompt-help">选一项任务，将对应的指令交给 AI。凭据通过客户端单独提供，不放进提示词。</p>
+    </div>
+
+    <fieldset class="prompt-tasks">
+      <legend>任务</legend>
+      <label><input type="radio" name="prompt-task" value="add" aria-controls="prompt-add" checked autofocus>添加</label>
+      <label><input type="radio" name="prompt-task" value="update" aria-controls="prompt-update">修改</label>
+      <label><input type="radio" name="prompt-task" value="temporary" aria-controls="prompt-temporary">临时 Key</label>
+    </fieldset>
+
+    <div class="task-description" id="task-description">准备好管理入口、目标域名，以及上游地址或本机启动文件。</div>
+    <details id="prompt-source"><summary>查看完整指令</summary>
+    <pre class="prompt-text" id="prompt-add" tabindex="0" aria-label="添加应用提示词">在 App Plug 中添加用户指定的一个应用，不修改已有应用。
+
+{{template "prompt-auth"}} 使用有权添加该域名的部署令牌或管理员令牌。
+
+先确认目标域名和应用类型。域名填完整域名或单个短名；短名自动追加 .{{.BaseDomain}}，不含协议、端口或路径。向已确认的管理源发送 POST {{.APIPath}}/routes，按类型二选一，用实际数据替换示例值：
+
+已有服务：{"domain":"域名","name":"显示名称","address":"127.0.0.1:8080"}
+address 填私有或回环 IP 加端口，不填 URL；此类服务不由导航启停。
+
+本机托管：{"domain":"域名","startFile":"/path/to/demo-app/run","args":[],"autoStart":false}
+仅管理员可设置启动文件和参数。startFile 填导航主机上可信可执行文件的绝对路径；args 逐项传入，不经 Shell。按用户要求设置 autoStart；可选 port，省略或为 0 时自动识别监听端口。
+
+两类配置不能混用；可另填 description。确认返回 201 才算添加成功。遇到 401、403、404 或 409，报告原因，不绕过权限、不覆盖路由。
+
+{{template "prompt-verify"}} 若返回 ready=false，注明托管应用尚未就绪，不擅自启动。</pre>
+
+    <pre class="prompt-text" id="prompt-update" tabindex="0" aria-label="修改应用提示词" hidden>只修改 App Plug 中用户指定的一个现有应用；不创建新应用。
+
+{{template "prompt-auth"}} 使用有权管理该应用的令牌；修改本机托管配置需要管理员令牌。
+
+确认原域名和要变更的字段。域名可用全名或短名；短名自动追加 .{{.BaseDomain}}。向已确认的管理源发 GET {{.APIPath}}/routes/&lt;原域名&gt;，不存在则报告，不新建。fileManaged 为 true 时，交由主机管理员修改配置文件。
+
+向同一地址发 PUT，带 If-Match: * 并提交完整的可写配置。保留未修改的 name、description，以及已有服务的 address 或本机托管的 startFile、args、port、autoStart。不要把 owner、url、running、ready、upstream、fileManaged 或 launcher 回填。改域名时填 newDomain；如正文包含 domain，仍填与 URL 等价的原域名。
+
+如需保留旧节点配置，使用原短别名作 URL 中的域名，只提交 node、port、name 和可选的 description；不自行迁移节点配置。
+
+确认返回 200 才算更新成功。收到 401、403、404、409 或 412 时报告原因；不得去掉 If-Match、覆盖冲突域名或改动其他应用。
+
+{{template "prompt-verify"}} 若返回 ready=false，注明托管应用尚未就绪，不擅自启动。</pre>
+
+    <pre class="prompt-text" id="prompt-temporary" tabindex="0" aria-label="临时 Key 提示词" hidden>使用 App Plug 临时 API Key 添加管理员预先填写的一个应用。没有签发回执时，先请用户向管理员取得回执。
+
+{{template "prompt-auth"}} 仅使用另行提供的临时 Key，不使用常规部署令牌或管理员令牌。
+
+向用户确认签发回执中的 POST 地址；本实例的路径为 {{.APIPath}}/routes。请求体只发送 {"domain":"回执中的完整域名"}，按回执原样填写，不添加其他字段或替换域名。
+
+返回 201 表示添加成功并消费该密钥，此后不能再使用；临时 Key 本身也不能查询或修改应用。收到 401、403、404 或 409 时报告原因，不覆盖、不改其他应用。请求超时或结果不明时，请管理员核对是否已添加，不盲目重试或用临时 Key 查询。
+
+{{template "prompt-verify"}}</pre>
+    </details>
+
+    <div class="copy-row">
+      <button type="button" id="copy-prompt">复制提示词</button>
+      <button type="button" id="select-prompt" class="tool-button">选中文本</button>
+      <p id="copy-result" role="status"></p>
+    </div>
+  </dialog>
+</body>
+</html>
+
+{{define "prompt-auth"}}先确认管理源（协议、主机、端口），不要把应用公开地址当成管理源。凭据只由客户端安全注入，在确认的管理端发送 Authorization: Bearer &lt;令牌&gt;；JSON 请求使用 Content-Type: application/json。不要把凭据写进提示词、URL、日志、回复、命令参数或仓库，也不要携带凭据跟随重定向。缺少信息时先向用户确认。{{end}}
+{{define "prompt-verify"}}使用返回的 url 检查目标应用，不发送管理凭据。无法确认访问时，说明配置已保存，但访问尚未验证。{{end}}

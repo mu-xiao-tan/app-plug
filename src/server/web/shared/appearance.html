@@ -1,0 +1,12 @@
+{{define "appearance"}}<details class="appearance" hidden>
+  <summary class="icon-action" title="切换外观" aria-label="切换外观"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 1 0 16Z" fill="currentColor" stroke="none"/></svg></summary>
+  <fieldset class="appearance-options">
+    <legend>选择外观</legend>
+    <label><input type="radio" name="appearance" value="system" checked><span class="swatch system" aria-hidden="true"></span>跟随系统</label>
+    <label><input type="radio" name="appearance" value="light"><span class="swatch light" aria-hidden="true"></span>清浅</label>
+    <label><input type="radio" name="appearance" value="sand"><span class="swatch sand" aria-hidden="true"></span>暖砂</label>
+    <label><input type="radio" name="appearance" value="forest"><span class="swatch forest" aria-hidden="true"></span>深绿</label>
+    <label><input type="radio" name="appearance" value="night"><span class="swatch night" aria-hidden="true"></span>午夜蓝</label>
+  </fieldset>
+</details>{{end}}
+{{define "trace"}}<svg class="trace" viewBox="0 0 300 84" fill="none" aria-hidden="true"><g stroke="#748a91" stroke-width="1.5"><path d="M0 14h76l26 26h60l25-25h82M0 72h78l15-15h88l15 15h73"/><circle cx="277" cy="15" r="6"/><circle cx="277" cy="72" r="6"/></g><path stroke="#f2a06b" stroke-width="3" d="M0 42h56l22 14h58l19-15h113m-8-6 8 6-8 6"/></svg>{{end}}
