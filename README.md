@@ -53,7 +53,7 @@ curl --noproxy '*' -H 'Host: nav.example.com' http://127.0.0.1:49101/
 
 发往 `main` 的 PR 和推送到 `main` 的提交会运行 [App Plug CI](https://github.com/mu-xiao-tan/app-plug/actions/workflows/ci.yml)。Linux、macOS、Windows 分别在 x86_64 和 ARM64 runner 上验证实际目标、检查 `gofmt`、执行 `go vet` 和 `go test`，再校验安装包的 SHA-256 并解包运行 `version`、`help` 和隔离的 `config init/check/set/check`。总检查 `App Plug CI required` 只有在六个作业均成功时才通过；以对应提交的运行记录为准，不把交叉编译计作原生验收。CI 不覆盖系统服务安装、签名/公证或真实部署。
 
-从运行详情的 Artifacts 下载对应系统和架构的 `app-plug-<目标>`。外层 ZIP 内有 Linux/macOS 的 `.tar.gz` 或 Windows 的 `.zip`，以及 `SHA256SUMS`。在该目录用 Linux 的 `sha256sum -c SHA256SUMS` 或 macOS 的 `shasum -a 256 -c SHA256SUMS` 校验。Windows 用 `Get-FileHash -Algorithm SHA256 -LiteralPath <压缩包>`，对照 `SHA256SUMS` 中同名文件的摘要。校验失败不要解包或运行。构建包保留 14 天，仅用于验证；工作流不创建标签、不发 Release、不部署。
+从运行详情的 Artifacts 下载对应系统和架构的 `app-plug-<目标>`。外层 ZIP 内有 Linux/macOS 的 `.tar.gz` 或 Windows 的 `.zip`，以及 `SHA256SUMS`。在该目录用 Linux 的 `sha256sum -c SHA256SUMS` 或 macOS 的 `shasum -a 256 -c SHA256SUMS` 校验。Windows 用 `Get-FileHash -Algorithm SHA256 -LiteralPath <压缩包>`，对照 `SHA256SUMS` 中同名文件的摘要。校验失败不要解包或运行。构建包保留 14 天。正式下载请用 [Releases](https://github.com/mu-xiao-tan/app-plug/releases) 中同一版本的压缩包和 `SHA256SUMS`。匹配程序版本的受保护正式标签通过六个原生作业与独立审批后，工作流才自动发布；它不会创建标签或部署应用。维护者见[发版手册](docs/releasing.md)。
 
 ## 管理入口
 

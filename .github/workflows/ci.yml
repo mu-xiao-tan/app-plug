@@ -15,8 +15,55 @@ env:
   CGO_ENABLED: '0'
 
 jobs:
+  release_ref:
+    name: Validate release tag and approval policy
+    if: ${{ github.event_name == 'push' && github.ref_type == 'tag' }}
+    permissions:
+      contents: read
+      actions: read
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      commit: ${{ steps.tag.outputs.commit }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Require a new protected stable tag on main
+        id: tag
+        shell: bash
+        env:
+          REF_PROTECTED: ${{ github.ref_protected }}
+          REF_CREATED: ${{ github.event.created }}
+          REF_DELETED: ${{ github.event.deleted }}
+        run: |
+          [[ "$GITHUB_REF_NAME" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]
+          [[ "$REF_PROTECTED" == true && "$REF_CREATED" == true && "$REF_DELETED" == false ]]
+          commit=$(git rev-parse 'HEAD^{commit}')
+          [[ "$commit" == "$(git rev-parse "$GITHUB_SHA^{commit}")" ]]
+          [[ "$commit" == "$(git rev-parse "$GITHUB_REF^{commit}")" ]]
+          git merge-base --is-ancestor "$commit" refs/remotes/origin/main
+          printf 'commit=%s\n' "$commit" >> "$GITHUB_OUTPUT"
+      - name: Verify the protected GitHub release environment before requesting approval
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          base="repos/$GITHUB_REPOSITORY/environments/github-release"
+          gh api "$base" | jq -e '
+            .deployment_branch_policy == {protected_branches: false, custom_branch_policies: true}
+            and any(.protection_rules[]; .type == "required_reviewers"
+              and .prevent_self_review == true and (.reviewers | length) > 0)
+          ' > /dev/null
+          gh api --paginate --slurp "$base/deployment-branch-policies" | jq -e '
+            [.[].branch_policies[] | {type, name}] == [{type: "tag", name: "v*.*.*"}]
+          ' > /dev/null
+
   build:
     name: Build and test (${{ matrix.target }})
+    needs: [release_ref]
+    if: ${{ !cancelled() && (needs.release_ref.result == 'success' || (github.ref_type != 'tag' && needs.release_ref.result == 'skipped')) }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 20
     strategy:
@@ -39,6 +86,7 @@ jobs:
       - name: Checkout source
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
+          ref: ${{ needs.release_ref.outputs.commit || github.sha }}
           persist-credentials: false
       - name: Set up Go from go.mod
         uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
@@ -78,6 +126,12 @@ jobs:
           TARGET: ${{ matrix.target }}
         shell: bash
         run: python -I scripts/package.py dist "$TARGET"
+      - name: Verify archive and manifest against this release tag
+        if: ${{ github.ref_type == 'tag' }}
+        shell: bash
+        env:
+          TARGET: ${{ matrix.target }}
+        run: python -IB scripts/release_assets.py check-target dist "$GITHUB_REF_NAME" "$TARGET"
       - name: Upload verified CI package
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
@@ -90,10 +144,9 @@ jobs:
   required:
     name: App Plug CI required
     if: ${{ always() }}
-    needs: [build]
-    permissions: {}
+    needs: [release_ref, build]
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - name: Require every matrix job to succeed
         shell: bash
@@ -102,3 +155,74 @@ jobs:
         run: |
           printf 'Build matrix result: %s\n' "$BUILD_RESULT"
           test "$BUILD_RESULT" = success
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ needs.release_ref.outputs.commit || github.sha }}
+          persist-credentials: false
+      - name: Test the release asset gate
+        run: python3 -IB scripts/test_release_assets.py
+      - name: Download packages from this workflow run
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          path: ${{ runner.temp }}/app-plug-native-packages
+      - name: Verify the complete release-sized artifact set without publishing
+        shell: bash
+        run: |
+          args=()
+          if [[ "$GITHUB_REF_TYPE" == tag ]]; then args+=(--tag "$GITHUB_REF_NAME"); fi
+          python3 -IB scripts/release_assets.py collect "$RUNNER_TEMP/app-plug-native-packages" \
+            "$RUNNER_TEMP/app-plug-verified-assets" "${args[@]}"
+
+  publish:
+    name: Publish approved GitHub Release
+    if: ${{ github.event_name == 'push' && github.ref_type == 'tag' && needs.required.result == 'success' }}
+    needs: [release_ref, required]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: github-release
+    permissions:
+      contents: write
+    concurrency:
+      group: app-plug-release-${{ github.ref }}
+      cancel-in-progress: false
+    steps:
+      - name: Require the environment-only release switch
+        shell: bash
+        env:
+          RELEASE_ENABLED: ${{ secrets.APP_PLUG_RELEASE_ENABLED }}
+        run: |
+          if [[ "$RELEASE_ENABLED" != true ]]; then
+            printf 'Publishing is disabled; configure the approved environment first.\n' >&2
+            exit 1
+          fi
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ needs.release_ref.outputs.commit }}
+          persist-credentials: false
+      - name: Download packages from this workflow run
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          path: ${{ runner.temp }}/app-plug-native-packages
+      - name: Restage only verified assets for this tag
+        shell: bash
+        run: |
+          python3 -IB scripts/release_assets.py collect "$RUNNER_TEMP/app-plug-native-packages" \
+            "$RUNNER_TEMP/app-plug-verified-assets" --tag "$GITHUB_REF_NAME"
+      - name: Recheck the live tag and publish the complete asset set
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_COMMIT: ${{ needs.release_ref.outputs.commit }}
+        run: |
+          # The public tag may be lightweight or annotated; resolve the live ref to its commit.
+          refs=$(git ls-remote --exit-code origin "$GITHUB_REF" "${GITHUB_REF}^{}")
+          live_commit=$(awk -v ref="$GITHUB_REF" '
+            $2 == ref { direct = $1 }
+            $2 == ref "^{}" { peeled = $1 }
+            END { if (direct != "") print (peeled == "" ? direct : peeled); else exit 1 }
+          ' <<< "$refs")
+          [[ "$live_commit" == "$RELEASE_COMMIT" && "$(git rev-parse HEAD)" == "$RELEASE_COMMIT" ]]
+          gh release create "$GITHUB_REF_NAME" "$RUNNER_TEMP/app-plug-verified-assets/"* \
+            --repo "$GITHUB_REPOSITORY" --verify-tag --target "$RELEASE_COMMIT" \
+            --title "App Plug $GITHUB_REF_NAME" \
+            --notes "Native packages verified for commit $RELEASE_COMMIT in $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID. Check SHA256SUMS before extracting."
