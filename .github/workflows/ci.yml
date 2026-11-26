@@ -50,15 +50,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          set -euo pipefail
           base="repos/$GITHUB_REPOSITORY/environments/github-release"
-          gh api "$base" | jq -e '
-            .deployment_branch_policy == {protected_branches: false, custom_branch_policies: true}
-            and any(.protection_rules[]; .type == "required_reviewers"
-              and .prevent_self_review == true and (.reviewers | length) > 0)
-          ' > /dev/null
-          gh api --paginate --slurp "$base/deployment-branch-policies" | jq -e '
-            [.[].branch_policies[] | {type, name}] == [{type: "tag", name: "v*.*.*"}]
-          ' > /dev/null
+          gh api "$base" | python3 -IB scripts/release_policy.py environment
+          gh api --paginate --slurp "$base/deployment-branch-policies" \
+            | python3 -IB scripts/release_policy.py policies
 
   build:
     name: Build and test (${{ matrix.target }})
@@ -159,8 +155,10 @@ jobs:
         with:
           ref: ${{ needs.release_ref.outputs.commit || github.sha }}
           persist-credentials: false
-      - name: Test the release asset gate
-        run: python3 -IB scripts/test_release_assets.py
+      - name: Test the release policy and asset gates
+        run: |
+          python3 -IB scripts/test_release_policy.py
+          python3 -IB scripts/test_release_assets.py
       - name: Download packages from this workflow run
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
