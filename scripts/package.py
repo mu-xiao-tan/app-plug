@@ -18,6 +18,7 @@ TARGETS = tuple(f"{os_name}-{arch}" for os_name in ("linux", "darwin", "windows"
                 for arch in ("amd64", "arm64"))
 DOCS = (
     "README.md",
+    "docs/releasing.md",
     "examples/app-plug.service",
     "examples/config.json",
     "examples/nginx.conf",
